@@ -449,6 +449,14 @@ def select_ports(
     layers_excluded: Optional[Tuple[Tuple[int, int], ...]] = None,
     port_type: Optional[str] = None,
     clockwise: bool = True,
+    row: int = None,
+    col: int = None,
+    odd_col: bool = None,
+    even_col: bool = None,
+    col_greater_than: int = None,
+    col_less_than: int = None,
+    row_greater_than: int = None,
+    row_less_than: int = None,
 ) -> Dict[str, Port]:
     """Returns a dict of ports from a dict of ports
 
@@ -472,7 +480,54 @@ def select_ports(
     # Make it accept Component or ComponentReference
     if isinstance(ports, (Component, ComponentReference)):
         ports = ports.ports
-
+    if row is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if int(str(p_name).split("_")[-2]) == row
+        }
+    if col is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if int(str(p_name).split("_")[-1]) == col
+        }
+    if odd_col is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if (int(str(p_name).split("_")[-1]) % 2) != 0
+        }
+    if even_col is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if (int(str(p_name).split("_")[-1]) % 2) == 0
+        }
+    if col_greater_than is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if int(str(p_name).split("_")[-1]) > col_greater_than
+        }
+    if col_less_than is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if int(str(p_name).split("_")[-1]) < col_less_than
+        }
+    if row_greater_than is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if int(str(p_name).split("_")[-2]) > row_greater_than
+        }
+    if row_less_than is not None:
+        ports = {
+            p_name: p
+            for p_name, p in ports.items()
+            if int(str(p_name).split("_")[-2]) < row_less_than
+        }
     if layer:
         ports = {p_name: p for p_name, p in ports.items() if p.layer == layer}
     if prefix:
