@@ -38,9 +38,9 @@ def clean_value_json(value: Any) -> Any:
         value = value.dict()
     elif isinstance(value, float) and int(value) == value:
         value = int(value)
-    elif isinstance(value, (np.int64, np.int32)):
+    elif isinstance(value, (int, np.integer)):
         value = int(value)
-    elif isinstance(value, float):
+    elif isinstance(value, (float, np.inexact)):
         value = float(value)
     elif isinstance(value, np.ndarray):
         value = np.round(value, 3)
@@ -59,8 +59,6 @@ def clean_value_json(value: Any) -> Any:
 
     elif hasattr(value, "to_dict"):
         value = value.to_dict()
-    elif isinstance(value, np.float64):
-        value = float(value)
     elif callable(value) and isinstance(value, toolz.functoolz.Compose):
         value = [clean_value_json(value.first)] + [
             clean_value_json(func) for func in value.funcs
