@@ -32,50 +32,60 @@ from gdsfactory.types import (
 logger = logging.root
 component_settings = ["function", "component", "settings"]
 cross_section_settings = ["function", "cross_section", "settings"]
+layers_required = ["DEVREC", "PORT", "PORTE"]
 
 
 class Pdk(BaseModel):
     """Pdk Library to store cell and cross_section functions.
 
-    Args:
+    Attributes:
         name: PDK name.
-        cross_sections: cross_sections.
-        cells: pcells.
+        cross_sections: dict of cross_sections factories.
+        cells: dict of parametric cells that return Components.
         layers: layers dict.
-        containers: pcells that contain other cells.
+        containers: dict of pcells that contain other cells.
         base_pdk: a pdk to copy from and extend.
-        default_decorator: the default decorator to use for all cells in this PDK, if not otherwise defined on the cell.
+        default_decorator: decorate all cells, if not otherwise defined on the cell.
     """
 
     name: str
-    cross_sections: Dict[str, CrossSectionFactory]
-    cells: Dict[str, ComponentFactory]
+    cross_sections: Dict[str, CrossSectionFactory] = Field(default_factory=dict)
+    cells: Dict[str, ComponentFactory] = Field(default_factory=dict)
     layers: Dict[str, Layer] = Field(default_factory=dict)
     containers: Dict[str, ComponentFactory] = containers_default
     base_pdk: Optional["Pdk"] = None
     default_decorator: Optional[Callable[[Component], None]] = None
 
+    def validate_layers(self):
+        for layer in layers_required:
+            if layer not in self.layers:
+                raise ValueError(
+                    f"{layer!r} not in Pdk.layers {list(self.layers.keys())}"
+                )
+
     def activate(self) -> None:
+        """Set current pdk to as the active pdk."""
         if self.base_pdk:
-            _cross_sections = self.base_pdk.cross_sections
-            _cross_sections |= self.cross_sections
-            self.cross_sections = _cross_sections
+            cross_sections = self.base_pdk.cross_sections
+            cross_sections.update(self.cross_sections)
+            self.cross_sections = cross_sections
 
-            _cells = self.base_pdk.cells
-            _cells |= self.cells
-            self.cells |= _cells
+            cells = self.base_pdk.cells
+            cells.update(self.cells)
+            self.cells.update(cells)
 
-            _containers = self.base_pdk.containers
-            _containers |= self.containers
-            self.containers |= _containers
+            containers = self.base_pdk.containers
+            containers.update(self.containers)
+            self.containers.update(containers)
 
-            _layers = self.base_pdk.layers
-            _layers |= self.layers
-            self.layers |= _layers
+            layers = self.base_pdk.layers
+            layers.update(self.layers)
+            self.layers.update(layers)
 
             if not self.default_decorator:
                 self.default_decorator = self.base_pdk.default_decorator
-        set_active_pdk(self)
+        self.validate_layers()
+        _set_active_pdk(self)
 
     def register_cells(self, **kwargs) -> None:
         """Register cell factories."""
@@ -259,7 +269,13 @@ class Pdk(BaseModel):
                 if cell_name in self.cells
                 else self.containers[cell_name]
             )
-            return cell(**settings)
+            component = cell(**settings)
+            component = (
+                self.default_decorator(component) or component
+                if self.default_decorator
+                else component
+            )
+            return component
         else:
             raise ValueError(
                 "get_component expects a ComponentSpec (Component, ComponentFactory, "
@@ -380,7 +396,7 @@ def get_active_pdk() -> Pdk:
     return _ACTIVE_PDK
 
 
-def set_active_pdk(pdk: Pdk) -> None:
+def _set_active_pdk(pdk: Pdk) -> None:
     global _ACTIVE_PDK
     old_pdk = _ACTIVE_PDK
     _ACTIVE_PDK = pdk
@@ -400,7 +416,14 @@ on_yaml_cell_modified.add_handler(show)
 
 
 if __name__ == "__main__":
-    c = _ACTIVE_PDK.get_component("straight")
-    print(c.settings)
+    # c = _ACTIVE_PDK.get_component("straight")
+    # print(c.settings)
     # on_pdk_activated += print
     # set_active_pdk(GENERIC)
+    c = Pdk(
+        name="demo",
+        cells=cells,
+        cross_sections=cross_sections,
+        # layers=dict(DEVREC=(3, 0), PORTE=(3, 5)),
+    )
+    print(c.layers)

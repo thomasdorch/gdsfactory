@@ -911,14 +911,15 @@ class Component(Device):
 
     def show(
         self,
-        show_ports: bool = True,
+        show_ports: bool = False,
         show_subports: bool = False,
-        port_marker_layer: Layer = (1, 12),
+        port_marker_layer: Layer = "SHOW_PORTS",
     ) -> None:
         """Show component in klayout.
 
-        show_subports = True adds pins to a component copy for klayout show.
-        so the original component remains intact.
+        returns a copy of the Component, so the original component remains intact.
+        with pins markers on each port show_ports = True, and optionally also
+        the ports from the references (show_subports=True)
 
         Args:
             show_ports: shows component with port markers and labels.
@@ -931,21 +932,15 @@ class Component(Device):
         if show_subports:
             component = self.copy(suffix="", cache=False)
             for reference in component.references:
-                try:
-                    add_pins_triangle(
-                        component=component,
-                        reference=reference,
-                        layer=port_marker_layer,
-                    )
-                except ValueError:
-                    pass
+                add_pins_triangle(
+                    component=component,
+                    reference=reference,
+                    layer=port_marker_layer,
+                )
 
         elif show_ports:
             component = self.copy(suffix="", cache=False)
-            try:
-                add_pins_triangle(component=component, layer=port_marker_layer)
-            except ValueError:
-                pass
+            add_pins_triangle(component=component, layer=port_marker_layer)
         else:
             component = self
 
