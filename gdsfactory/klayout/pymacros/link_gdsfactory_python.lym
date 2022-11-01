@@ -20,9 +20,12 @@ import pya
 import sys
 import json
 import importlib
+import platform
 from pathlib import Path
 
 python_base_dir = pya.FileDialog.ask_existing_dir("Select directory of Python environment to link:", "")
+if python_base_dir is None:
+    quit()
 
 import_packages = [
     'click',
@@ -53,44 +56,75 @@ import_packages = [
     'gdsfactory',
     'flayout'
 ]
-
-external_site_packages = list(Path(python_base_dir).glob("**/site-packages"))
+python_base_dir = Path(python_base_dir)
 
 if len(external_site_packages) > 1 or len(external_site_packages) == 0:
     raise ImportError("The specified directory should contain exactly one 'site-packages' folder.")
 
-python_lib_path = external_site_packages[0]
-
 # Add path to import all extra modules
-sys.path.append(str(python_lib_path))
+extra_lib_paths = []
+if platform.system == "Windows":
+    extra_lib_paths.extend(
+    [
+        python_base_dir / "DLLs",
+        ]
+    )
+extra_lib_paths.extend(
+    [
+        python_base_dir,
+        python_base_dir / "lib",
+        python_base_dir / "lib" / "site-packages"
+        ]
+    )
+
+extra_paths_to_prepend = []
+for p in extra_lib_paths:
+    path = str(p)
+    if path not in sys.path:
+        extra_paths_to_prepend.append(path)
+
+sys.path = [*extra_paths_to_prepend, *sys.path]
 
 for package in import_packages:
-  package_info_dir =  list(python_lib_path.glob(f"{package}-*dist-info*"))
+  possible_package_dirs = list(ext_site_package_path.glob(f"{package}*"))
+  if python_lib_path / package in possible_package_dirs:
+    print(f"Found system package {package}, which will be included by default.")
 
-  if len(package_info_dir) == 0:
-    continue
+  if ext_site_package_path / package in possible_package_dirs:
+    print(f"Found user-installed {package} (in site-packages), which will be included by default.")
 
-  if len(package_info_dir) > 1:
-    print(f"Multiple info directories for {package} found! :\n{package_info_dir}")
-    continue
+  else:
+      package_info_dir =  list(ext_site_package_path.glob(f"{package}-*.dist-info"))
+      print(f"Looking for package {package} with package info at {package_info_dir}")
 
-  package_info_file = package_info_dir[0] / "direct_url.json"
+      if len(package_info_dir) == 0:
+        continue
 
-  if not package_info_file.exists():
-    continue
+      if len(package_info_dir) > 1:
+        print(f"Multiple info directories for {package} found! Skipping \n\tDirectories: {package_info_dir}")
+        continue
 
-  with open(package_info_file, 'r') as f:
-    # Should be in format: "file:///path/to/local/package"
-    try:
-        package_import_path = json.load(f)["url"][7:]
-        print("found package: ", package_import_path)
-    except Exception as err:
-        print(err)
+      package_info_file = package_info_dir[0] / "direct_url.json"
 
-  if package_import_path not in sys.path:
-    sys.path.append(package_import_path)
+      if not package_info_file.exists():
+        print(f"Importing {package} from {python_lib_path}.")
+        continue
 
-  # importlib.import_module(package)
+      with open(package_info_file, 'r') as f:
+        # Should be in format: "file:///path/to/local/package"
+        try:
+            url = json.load(f)["url"]
+            package_import_path = str(pathlib.Path(url.lstrip("file://")))
+            print(f"Importing package from {package_import_path}.")
+        except Exception as err:
+            print(err)
+
+      if package_import_path not in sys.path and path.exists():
+        print(f"Appending package location to sys.path: {package_import_path}")
+        sys.path.append(str(package_import_path))
+
+  print(f"Importing {package}...")
+  importlib.import_module(package)
 
 # sys.path.remove(package_import_path)
 
