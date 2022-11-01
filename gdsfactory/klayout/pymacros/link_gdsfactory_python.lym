@@ -23,8 +23,8 @@ import importlib
 import platform
 from pathlib import Path
 
-python_base_dir = pya.FileDialog.ask_existing_dir("Select directory of Python environment to link:", "")
-if python_base_dir is None:
+env_dir = pya.FileDialog.ask_existing_dir("Select directory of Python environment to link:", "")
+if env_dir is None:
     quit()
 
 import_packages = [
@@ -56,24 +56,43 @@ import_packages = [
     'gdsfactory',
     'flayout'
 ]
-python_base_dir = Path(python_base_dir)
+env_dir = Path(env_dir)
 
-if len(external_site_packages) > 1 or len(external_site_packages) == 0:
-    raise ImportError("The specified directory should contain exactly one 'site-packages' folder.")
+lib_dir = env_dir / "lib"
+
+if not lib_dir.exists():
+    raise ImportError(f"Could not find a 'lib' directory in {env_dir}.")
+
+conda_meta = list(env_dir.glob("conda-meta"))[0]
+if not conda_meta:
+    raise ImportError("The environment does not appear to be a conda environment, issues are likely!")
+
+# Figure out the python version
+py_version = list(conda_meta.glob("python*"))[0].name.split("-")[1].split(".")
 
 # Add path to import all extra modules
-extra_lib_paths = []
+extra_lib_paths = [
+    env_dir / f"python{py_version[0]}{py_version[1]}.zip"
+]
+
+
 if platform.system == "Windows":
+    site_packages_dir = lib_dir / "site-packages"
     extra_lib_paths.extend(
     [
-        python_base_dir / "DLLs",
+        env_dir,
+        env_dir / "DLLs",
+        site_packages_dir
         ]
     )
-extra_lib_paths.extend(
+
+else: # if platform.system == "Linux":
+    py_dir = lib_dir / f"python{py_version[0]}.{py_version[1]}"
+    site_packages_dir = py_dir / "site-packages"
+    extra_lib_paths.extend(
     [
-        python_base_dir,
-        python_base_dir / "lib",
-        python_base_dir / "lib" / "site-packages"
+        py_dir / "lib-dynload",
+        site_packages_dir
         ]
     )
 
@@ -86,15 +105,15 @@ for p in extra_lib_paths:
 sys.path = [*extra_paths_to_prepend, *sys.path]
 
 for package in import_packages:
-  possible_package_dirs = list(ext_site_package_path.glob(f"{package}*"))
-  if python_lib_path / package in possible_package_dirs:
+  possible_package_dirs = list(site_packages_dir.glob(f"{package}*"))
+  if python_lib_dir / package in possible_package_dirs:
     print(f"Found system package {package}, which will be included by default.")
 
-  if ext_site_package_path / package in possible_package_dirs:
+  if site_packages_dir / package in possible_package_dirs:
     print(f"Found user-installed {package} (in site-packages), which will be included by default.")
 
   else:
-      package_info_dir =  list(ext_site_package_path.glob(f"{package}-*.dist-info"))
+      package_info_dir =  list(site_packages_dir.glob(f"{package}-*.dist-info"))
       print(f"Looking for package {package} with package info at {package_info_dir}")
 
       if len(package_info_dir) == 0:
@@ -107,21 +126,25 @@ for package in import_packages:
       package_info_file = package_info_dir[0] / "direct_url.json"
 
       if not package_info_file.exists():
-        print(f"Importing {package} from {python_lib_path}.")
+        print(f"Importing {package} from environment.")
         continue
 
       with open(package_info_file, 'r') as f:
         # Should be in format: "file:///path/to/local/package"
         try:
             url = json.load(f)["url"]
-            package_import_path = str(pathlib.Path(url.lstrip("file://")))
+            package_import_path = str(pathlib.Path(url).as_posix()).lstrip("file:")
+
+            if platform.system == "Windows":
+                package_import_path = package_import_path[1:]
             print(f"Importing package from {package_import_path}.")
+
         except Exception as err:
             print(err)
 
-      if package_import_path not in sys.path and path.exists():
+      if package_import_path not in sys.path and pathlib.Path(package_import_path).exists():
         print(f"Appending package location to sys.path: {package_import_path}")
-        sys.path.append(str(package_import_path))
+        sys.path.append(package_import_path)
 
   print(f"Importing {package}...")
   importlib.import_module(package)
