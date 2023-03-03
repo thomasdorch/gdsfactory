@@ -60,7 +60,7 @@ full = [
     "mapbox_earcut",
     "natsort",
     "networkx",
-    "pyglet<2",
+    "pyglet<3",
     "pygmsh",
     "rich",
     "scikit-fem",
