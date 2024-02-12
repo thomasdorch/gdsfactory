@@ -33,7 +33,7 @@ dependencies = [
   "toolz<1",
   "types-PyYAML",
   "typer<1",
-  "watchdog<4"
+  "watchdog<5"
 ]
 description = "python library to generate GDS layouts"
 keywords = ["eda", "photonics", "python"]
